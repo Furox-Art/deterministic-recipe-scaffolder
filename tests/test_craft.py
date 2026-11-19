@@ -395,6 +395,39 @@ def test_verify_craft_kills_a_runaway_test_and_fails_closed() -> None:
     assert not _process_alive(pid), "the runaway child must be killed"
 
 
+def test_gate_timeout_decodes_posix_bytes_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """POSIX timeouts carry raw bytes even in text mode; the gate decodes them.
+
+    This reproduces the Linux ``TimeoutExpired.output`` shape deterministically
+    on every platform so the bytes branch stays covered (Windows re-collects
+    text after the kill and would otherwise never exercise it).
+    """
+
+    def posix_timeout(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(
+            args, kwargs["timeout"], output=b"2507\n", stderr=b""
+        )
+
+    monkeypatch.setattr("repocraft.craft.subprocess.run", posix_timeout)
+    with pytest.raises(CraftError, match="timed out") as excinfo:
+        verify_craft(
+            CraftResult(name="spinner", code=RUNAWAY_CODE, test=RUNAWAY_TEST),
+            run_ruff=False,
+            timeout=3.0,
+        )
+    cause = excinfo.value.__cause__
+    assert isinstance(cause, subprocess.TimeoutExpired)
+    assert cause.timeout == 3.0
+    output, stdout, stderr = cause.output, cause.stdout, cause.stderr
+    assert isinstance(output, str)
+    assert isinstance(stdout, str)
+    assert isinstance(stderr, str)
+    assert output == stdout == "2507\n"
+    assert stderr == ""
+
+
 def test_verify_craft_runs_the_test_gate_inside_a_temporary_sandbox() -> None:
     verified = verify_craft(
         CraftResult(name="sandbox", code=SANDBOX_CODE, test=SANDBOX_TEST),

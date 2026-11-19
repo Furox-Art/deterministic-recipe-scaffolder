@@ -195,6 +195,8 @@ def _run_gate(
 
     subprocess.run kills the child when the timeout expires; the overrun is
     then turned into a CraftError so a runaway proposal can never hang a gate.
+    Timeout output is normalized to text so the cause is identical on every
+    platform.
     """
     try:
         return subprocess.run(
@@ -206,10 +208,25 @@ def _run_gate(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as error:
+        _decode_timeout_output(error)
         raise CraftError(
             f"the craft gate timed out after {timeout:g} seconds and was killed;"
             " the proposal is rejected"
         ) from error
+
+
+def _decode_timeout_output(error: subprocess.TimeoutExpired) -> None:
+    """Normalize a timeout's captured output to ``str`` on every platform.
+
+    POSIX ``subprocess`` attaches raw bytes to ``TimeoutExpired`` even when the
+    gate runs in text mode, while Windows re-collects decoded text after the
+    kill. Decoding here keeps ``cause.output`` a deterministic ``str`` so the
+    fail-closed rejection behaves identically across platforms.
+    """
+    for attribute in ("output", "stdout", "stderr"):
+        value = getattr(error, attribute)
+        if isinstance(value, bytes):
+            setattr(error, attribute, value.decode("utf-8", errors="replace"))
 
 
 def _ruff_available() -> bool:
