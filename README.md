@@ -22,6 +22,11 @@ roadmap item.
 
 ## Status
 
+Version 0.5.0 hardens the craft gates: every gate subprocess runs inside the
+proposal's temporary directory with a 60-second timeout, a runaway proposal is
+killed and rejected (fail-closed), and the generated tests run under an
+isolated interpreter (`-E -s -B`). This is confinement, not a security sandbox.
+
 Version 0.4.1 moves the determinism matrix to v0.3.0, makes the cross-OS gate
 mandatory, covers recipe rendering and the locale/timezone axes, and gates PyPI
 publishing on a matching tag plus a passing test suite. No runtime behavior
@@ -168,6 +173,8 @@ Rules:
 - the module name must be a lowercase snake_case identifier;
 - only the standard library is allowed in the prompt, but the gates verify
   what actually runs;
+- every gate subprocess is confined to a fresh temporary directory and killed
+  after a 60-second timeout; a timeout rejects the proposal (fail-closed);
 - `--dry-run` lists the planned files after verification; the no-overwrite
   rule applies;
 - without `OPENAI_API_KEY` in the environment the command refuses to run.

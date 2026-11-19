@@ -3,7 +3,9 @@
 The model proposes a module, its code, and a unittest file as JSON. repocraft
 then runs deterministic gates on the proposal: python syntax, a check that the
 tests import the module, ruff when it is installed, and the generated tests
-themselves. Nothing is written until every gate passes and the user confirms.
+themselves. Every gate subprocess is confined to a fresh temporary directory
+and killed if it overruns its timeout; a timeout rejects the proposal. Nothing
+is written until every gate passes and the user confirms.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from repocraft.intent import (
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]{0,49}$")
 _RAN_TESTS = re.compile(r"Ran (\d+) tests?")
+_GATE_TIMEOUT_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
@@ -116,9 +119,18 @@ def request_craft(
 
 
 def verify_craft(
-    result: CraftResult, *, run_ruff: bool = True
+    result: CraftResult,
+    *,
+    run_ruff: bool = True,
+    timeout: float = _GATE_TIMEOUT_SECONDS,
 ) -> VerifiedCraft:
-    """Run every deterministic gate on the proposal and report what passed."""
+    """Run every deterministic gate on the proposal and report what passed.
+
+    Each gate subprocess runs inside the proposal's temporary directory and is
+    killed after ``timeout`` seconds; a timeout raises CraftError (fail-closed)
+    instead of hanging. The directory confinement and the isolated interpreter
+    flags keep ambient state out of the gates; they are not a security sandbox.
+    """
     checks: list[str] = []
     try:
         ast.parse(result.code)
@@ -147,9 +159,9 @@ def verify_craft(
         module.write_text(result.code, encoding="utf-8", newline="\n")
         test.write_text(result.test, encoding="utf-8", newline="\n")
         if run_ruff and _ruff_available():
-            lint = _ruff(directory)
+            lint = _ruff(directory, timeout=timeout)
             if lint.returncode != 0:
-                fixed = _ruff(directory, fix=True)
+                fixed = _ruff(directory, fix=True, timeout=timeout)
                 if fixed.returncode != 0:
                     detail = (fixed.stdout + fixed.stderr).strip()[:400]
                     raise CraftError(f"ruff rejected the generated code: {detail}")
@@ -161,12 +173,10 @@ def verify_craft(
                 checks.append("ruff (auto-fixed)")
             else:
                 checks.append("ruff")
-        completed = subprocess.run(
-            [sys.executable, f"test_{result.name}.py"],
+        completed = _run_gate(
+            [sys.executable, "-E", "-s", "-B", f"test_{result.name}.py"],
             cwd=directory,
-            capture_output=True,
-            text=True,
-            check=False,
+            timeout=timeout,
         )
         summary = completed.stdout + completed.stderr
         ran = _RAN_TESTS.search(summary)
@@ -178,15 +188,43 @@ def verify_craft(
     return VerifiedCraft(result=result, checks=tuple(checks))
 
 
+def _run_gate(
+    arguments: list[str], *, cwd: Path, timeout: float
+) -> subprocess.CompletedProcess[str]:
+    """Run one gate command confined to the sandbox directory, with a timeout.
+
+    subprocess.run kills the child when the timeout expires; the overrun is
+    then turned into a CraftError so a runaway proposal can never hang a gate.
+    """
+    try:
+        return subprocess.run(
+            arguments,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise CraftError(
+            f"the craft gate timed out after {timeout:g} seconds and was killed;"
+            " the proposal is rejected"
+        ) from error
+
+
 def _ruff_available() -> bool:
     return importlib.util.find_spec("ruff") is not None
 
 
-def _ruff(directory: Path, *, fix: bool = False) -> subprocess.CompletedProcess[str]:
-    arguments = ["-m", "ruff", "check", *(["--fix"] if fix else []), str(directory)]
-    return subprocess.run(
-        [sys.executable, *arguments],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def _ruff(
+    directory: Path, *, fix: bool = False, timeout: float = _GATE_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str]:
+    arguments = [
+        sys.executable,
+        "-m",
+        "ruff",
+        "check",
+        *(["--fix"] if fix else []),
+        str(directory),
+    ]
+    return _run_gate(arguments, cwd=directory, timeout=timeout)

@@ -18,8 +18,8 @@ authors:
 repository-code: "https://github.com/Furox-Art/repocraft"
 url: "https://github.com/Furox-Art/repocraft"
 license: MIT
-version: 0.4.1
-date-released: "2026-10-29"
+version: 0.5.0
+date-released: "2026-11-19"
 keywords:
   - project scaffolding
   - deterministic code generation

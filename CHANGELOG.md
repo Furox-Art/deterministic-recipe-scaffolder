@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-19
+
+### Fixed
+
+- The craft gates can no longer hang on runaway model code: every gate
+  subprocess runs with a timeout (60 seconds by default), the child is killed
+  when it overruns, and a timeout rejects the proposal (fail-closed).
+
+### Added
+
+- `verify_craft(..., timeout=...)` sets the per-gate timeout.
+- Regression tests prove an infinite-loop proposal fails the gate within the
+  timeout, the killed child is really gone, and every gate subprocess runs
+  confined to the proposal's temporary directory.
+
+### Changed
+
+- Gate subprocesses are confined to the proposal's temporary directory (ruff
+  included), and the generated tests run under `python -E -s -B` so ambient
+  `PYTHONPATH`, user site-packages, and bytecode writes stay out of the gates.
+  This is working-directory confinement, not a security sandbox.
+
 ## [0.4.1] - 2026-10-29
 
 ### Added
@@ -38,4 +60,5 @@ published. The README `Status` section records what each one added; in short:
   validation, and golden snapshots.
 - 0.1.0: library and CLI project scaffolds.
 
+[0.5.0]: https://github.com/Furox-Art/repocraft/releases/tag/v0.5.0
 [0.4.1]: https://github.com/Furox-Art/repocraft/releases/tag/v0.4.1

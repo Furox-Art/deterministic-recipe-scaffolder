@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from repocraft.craft import (
+    _GATE_TIMEOUT_SECONDS,
     CraftResult,
     craft_prompt,
     parse_craft,
@@ -51,6 +59,67 @@ NO_TESTS_TEST = '''"""No tests here."""
 import unittest
 
 import adder
+
+
+if __name__ == "__main__":
+    unittest.main()
+'''
+
+RUNAWAY_CODE = '''"""A module that never stops running."""
+
+import os
+import time
+
+
+def spin() -> None:
+    """Print the process id and then loop forever."""
+    print(os.getpid(), flush=True)
+    while True:
+        time.sleep(0.05)
+'''
+
+RUNAWAY_TEST = '''"""Tests for spinner."""
+
+import unittest
+
+import spinner
+
+
+class SpinnerTests(unittest.TestCase):
+    def test_spins(self) -> None:
+        spinner.spin()
+
+
+if __name__ == "__main__":
+    unittest.main()
+'''
+
+SANDBOX_CODE = '''"""Sandbox probe."""
+
+
+def noop() -> int:
+    """Return a constant."""
+    return 1
+'''
+
+SANDBOX_TEST = '''"""Tests for sandbox."""
+
+import tempfile
+import unittest
+from pathlib import Path
+
+import sandbox
+
+
+class SandboxTests(unittest.TestCase):
+    def test_gate_runs_inside_the_sandbox_directory(self) -> None:
+        self.assertEqual(sandbox.noop(), 1)
+        self.assertEqual(Path.cwd().parent, Path(tempfile.gettempdir()))
+        self.assertTrue(Path.cwd().name.startswith(tempfile.gettempprefix()))
+        self.assertEqual(
+            sorted(entry.name for entry in Path.cwd().iterdir()),
+            ["sandbox.py", "test_sandbox.py"],
+        )
 
 
 if __name__ == "__main__":
@@ -285,3 +354,85 @@ def test_request_craft_reports_failures(
 
     with pytest.raises(CraftError, match=fragment):
         request_craft("a small adder", api_key="secret")
+
+
+def _process_alive(pid: int) -> bool:
+    """Probe whether a gate child process is still running after the kill."""
+    if sys.platform == "win32":
+        listing = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return re.search(rf"\b{pid}\b", listing.stdout) is not None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def test_verify_craft_kills_a_runaway_test_and_fails_closed() -> None:
+    started = time.monotonic()
+    with pytest.raises(CraftError, match="timed out") as excinfo:
+        verify_craft(
+            CraftResult(name="spinner", code=RUNAWAY_CODE, test=RUNAWAY_TEST),
+            run_ruff=False,
+            timeout=3.0,
+        )
+    elapsed = time.monotonic() - started
+    assert elapsed < 30.0, "an infinite loop must fail the gate, never lock it"
+    cause = excinfo.value.__cause__
+    assert isinstance(cause, subprocess.TimeoutExpired)
+    assert cause.timeout == 3.0
+    output = cause.output
+    assert isinstance(output, str)
+    pid = int(output.splitlines()[0])
+    assert pid > 0
+    assert not _process_alive(pid), "the runaway child must be killed"
+
+
+def test_verify_craft_runs_the_test_gate_inside_a_temporary_sandbox() -> None:
+    verified = verify_craft(
+        CraftResult(name="sandbox", code=SANDBOX_CODE, test=SANDBOX_TEST),
+        run_ruff=False,
+    )
+
+    assert verified.checks[-1] == "unit tests pass"
+
+
+@pytest.mark.parametrize("timeout", [None, 7.5])
+def test_gate_subprocesses_are_confined_and_timed(
+    monkeypatch: pytest.MonkeyPatch, timeout: float | None
+) -> None:
+    calls: list[dict[str, Any]] = []
+    real_run = subprocess.run
+
+    def spy(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        cwd = kwargs["cwd"]
+        calls.append(
+            {
+                "args": args,
+                "timeout": kwargs.get("timeout"),
+                "module_present": (Path(cwd) / "adder.py").exists(),
+                "cwd_parent": Path(cwd).parent,
+            }
+        )
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr("repocraft.craft.subprocess.run", spy)
+    options: dict[str, Any] = {"run_ruff": False}
+    if timeout is not None:
+        options["timeout"] = timeout
+    verify_craft(CraftResult(name="adder", code=GOOD_CODE, test=GOOD_TEST), **options)
+
+    expected = _GATE_TIMEOUT_SECONDS if timeout is None else timeout
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["timeout"] == expected
+    assert call["module_present"] is True
+    assert call["cwd_parent"] == Path(tempfile.gettempdir())
+    assert call["args"] == [sys.executable, "-E", "-s", "-B", "test_adder.py"]
