@@ -1,6 +1,8 @@
-# repocraft
+# deterministic-recipe-scaffolder
 
-[![PyPI](https://img.shields.io/pypi/v/repocraft)](https://pypi.org/project/repocraft/)
+The PyPI distribution is `deterministic-recipe-scaffolder`; the CLI command remains `repocraft`. The legacy `repocraft` PyPI project is no longer updated.
+
+[![PyPI](https://img.shields.io/pypi/v/deterministic-recipe-scaffolder)](https://pypi.org/project/deterministic-recipe-scaffolder/)
 
 Deterministic Python generation from validated input.
 
@@ -70,7 +72,7 @@ model or network dependency; only `ask` uses the network.
 ## Installation
 
 ```bash
-python -m pip install repocraft
+python -m pip install deterministic-recipe-scaffolder
 ```
 
 Or from this checkout:

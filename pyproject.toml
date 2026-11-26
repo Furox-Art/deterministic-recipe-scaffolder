@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "repocraft"
+name = "deterministic-recipe-scaffolder"
 version = "0.5.0"
 description = "Deterministic Python project scaffolding from a validated spec."
 readme = "README.md"
