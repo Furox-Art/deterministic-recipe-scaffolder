@@ -1,5 +1,5 @@
 {
-  "name": "@furox-art/repocraft",
+  "name": "repocraft-cli",
   "version": "0.5.0",
   "description": "CLI wrapper for RepoCraft's deterministic Python project scaffolding",
   "license": "MIT",

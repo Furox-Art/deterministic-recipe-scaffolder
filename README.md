@@ -310,7 +310,7 @@ Part of the Furox scientific-computing portfolio: independently versioned projec
 ## npm command
 
 Install the matching `repocraft` Python release in an active environment,
-then run `npm install -g @furox-art/repocraft`. The npm command launches
+then run `npm install -g repocraft-cli`. The npm command launches
 the Python CLI. Set `REPOCRAFT_PYTHON` to its Python executable when needed.
 
 ## License
