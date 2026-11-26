@@ -60,5 +60,5 @@ published. The README `Status` section records what each one added; in short:
   validation, and golden snapshots.
 - 0.1.0: library and CLI project scaffolds.
 
-[0.5.0]: https://github.com/Furox-Art/repocraft/releases/tag/v0.5.0
-[0.4.1]: https://github.com/Furox-Art/repocraft/releases/tag/v0.4.1
+[0.5.0]: https://github.com/Furox-Art/deterministic-recipe-scaffolder/releases/tag/v0.5.0
+[0.4.1]: https://github.com/Furox-Art/deterministic-recipe-scaffolder/releases/tag/v0.4.1

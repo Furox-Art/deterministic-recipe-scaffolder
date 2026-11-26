@@ -31,10 +31,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Furox-Art/repocraft"
-Repository = "https://github.com/Furox-Art/repocraft"
-Issues = "https://github.com/Furox-Art/repocraft/issues"
-Changelog = "https://github.com/Furox-Art/repocraft/releases"
+Homepage = "https://github.com/Furox-Art/deterministic-recipe-scaffolder"
+Repository = "https://github.com/Furox-Art/deterministic-recipe-scaffolder"
+Issues = "https://github.com/Furox-Art/deterministic-recipe-scaffolder/issues"
+Changelog = "https://github.com/Furox-Art/deterministic-recipe-scaffolder/releases"
 
 [project.optional-dependencies]
 dev = [

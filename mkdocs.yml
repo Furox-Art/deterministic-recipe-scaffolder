@@ -3,7 +3,7 @@ site_url: https://furox-art.github.io/repocraft/
 site_description: >-
   Deterministic Python project scaffolding from a validated spec.
 site_author: Furox-Art
-repo_url: https://github.com/Furox-Art/repocraft
+repo_url: https://github.com/Furox-Art/deterministic-recipe-scaffolder
 repo_name: Furox-Art/repocraft
 edit_uri: edit/main/docs/
 copyright: Released under the MIT License
